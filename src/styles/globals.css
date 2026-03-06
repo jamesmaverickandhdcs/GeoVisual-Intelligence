@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy: #1E3A5F;
+  --navy-light: #2E5080;
+  --navy-dark: #0F1F33;
+  --gold: #C9A227;
+  --gold-light: #E5C158;
+}
+
+body {
+  background-color: var(--navy-dark);
+  color: white;
+}
+
+/* Leaflet map override */
+.leaflet-container {
+  background: var(--navy-dark) !important;
+}
