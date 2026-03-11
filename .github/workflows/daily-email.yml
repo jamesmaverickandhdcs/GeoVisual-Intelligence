@@ -1,0 +1,14 @@
+name: Daily Email Newsletter
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # Every day at 7:00 AM UTC
+  workflow_dispatch:       # Manual trigger button in GitHub
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Daily Brief
+        run: |
+          curl -s "${{ secrets.APP_URL }}/api/cron/daily-email?secret=${{ secrets.CRON_SECRET }}"
