@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const NEWS_API_KEY  = process.env.NEWS_API_KEY;
+const NEWS_API_KEY   = process.env.NEWS_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const COUNTRY_COORDS: Record<string, { lat: number; lng: number; name: string }> = {
@@ -30,6 +30,10 @@ const COUNTRY_COORDS: Record<string, { lat: number; lng: number; name: string }>
   kp: { lat: 39.0,  lng: 125.8,  name: "North Korea" },
   ve: { lat: 10.5,  lng: -66.9,  name: "Venezuela" },
   af: { lat: 34.5,  lng: 69.2,   name: "Afghanistan" },
+  ps: { lat: 31.9,  lng: 35.2,   name: "Palestine" },
+  ly: { lat: 32.9,  lng: 13.2,   name: "Libya" },
+  sd: { lat: 15.5,  lng: 32.5,   name: "Sudan" },
+  et: { lat: 9.0,   lng: 38.7,   name: "Ethiopia" },
 };
 
 async function geminiAnalyze(title: string, content: string) {
@@ -44,7 +48,7 @@ Respond ONLY in valid JSON (no markdown, no extra text):
   "long": "10 sentence detailed analysis",
   "sentiment": "positive" or "neutral" or "negative",
   "category": "politics" or "economy" or "conflict" or "diplomacy" or "other",
-  "country_code": "2-letter ISO country code of the PRIMARY country this news is about (e.g. us, cn, ru, ua, il, in)"
+  "country_code": "2-letter ISO country code of the country most affected by this event. NEVER return us unless the news is ONLY about US internal politics with zero international angle. For Iran, Israel, Ukraine, Russia, China news always return their codes: ir, il, ua, ru, cn"
 }`;
 
   try {
@@ -69,17 +73,39 @@ Respond ONLY in valid JSON (no markdown, no extra text):
 
 export async function GET() {
   try {
+    // Rotate topics by hour for variety
+    const queries = [
+      "Ukraine Russia war",
+      "Israel Gaza conflict",
+      "China Taiwan military",
+      "Iran nuclear sanctions",
+      "North Korea missile",
+      "NATO diplomacy",
+    ];
+    const q = queries[new Date().getHours() % queries.length];
+
+    // Use top-headlines with broad international sources (free tier compatible)
     const newsRes = await fetch(
-      `https://newsapi.org/v2/top-headlines?category=general&language=en&pageSize=10&apiKey=${NEWS_API_KEY}`
+      `https://newsapi.org/v2/top-headlines?sources=reuters,bbc-news,al-jazeera-english,cnn,france-24,the-hindu&pageSize=12&apiKey=${NEWS_API_KEY}`
     );
     const newsData = await newsRes.json();
 
-    if (newsData.status !== "ok") throw new Error(newsData.message || "NewsAPI error");
+    if (newsData.status !== "ok") {
+      // Fallback: use everything endpoint with just q param
+      const fallbackRes = await fetch(
+        `https://newsapi.org/v2/everything?q=${encodeURIComponent(q)}&language=en&sortBy=publishedAt&pageSize=12&apiKey=${NEWS_API_KEY}`
+      );
+      const fallbackData = await fallbackRes.json();
+      if (fallbackData.status !== "ok") throw new Error(fallbackData.message || "NewsAPI error");
+      Object.assign(newsData, fallbackData);
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const articles = newsData.articles.filter((a: any) =>
+    const articles = (newsData.articles ?? []).filter((a: any) =>
       a.title && a.description && a.title !== "[Removed]"
     );
+
+    if (articles.length === 0) throw new Error("No articles found");
 
     const processed = await Promise.all(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,13 +115,11 @@ export async function GET() {
           article.description + " " + (article.content ?? "")
         );
 
-        // Use Gemini-detected country, fallback to us
         const countryCode = (ai.country_code ?? "us").toLowerCase();
         const coords = COUNTRY_COORDS[countryCode] ?? COUNTRY_COORDS["us"];
 
-        // Small random offset so pins don't stack
-        const latOffset = (Math.random() - 0.5) * 3;
-        const lngOffset = (Math.random() - 0.5) * 3;
+        const latOffset = (Math.random() - 0.5) * 4;
+        const lngOffset = (Math.random() - 0.5) * 4;
 
         return {
           id: Buffer.from(article.url).toString("base64").slice(0, 16),

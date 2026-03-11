@@ -31,12 +31,17 @@ export async function GET(req: NextRequest) {
       history,
     });
   } catch {
-    const base = symbol==="GC=F"?2045:symbol==="CL=F"?78:symbol==="TSLA"?248:symbol==="MSFT"?415:symbol==="GOOGL"?175:symbol==="AMZN"?225:227;
+    // Fallback mock data for all symbols
+    const bases: Record<string,number> = {
+      "AAPL":227, "MSFT":415, "TSLA":248, "NVDA":875, "AMZN":225,
+      "GC=F":2045, "CL=F":78, "BTC-USD":67500, "DX-Y.NYB":104, "SI=F":28,
+    };
+    const base = bases[symbol] ?? 100;
     const labels = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
     const history = labels.map(date => ({
       date,
-      close:  +(base*(0.96+Math.random()*0.08)).toFixed(2),
-      volume: Math.round(20+Math.random()*40),
+      close:  +(base * (0.96 + Math.random() * 0.08)).toFixed(symbol === "BTC-USD" ? 0 : 2),
+      volume: Math.round(20 + Math.random() * 40),
     }));
     return NextResponse.json({ symbol, name:symbol, currency:"USD", currentPrice:base, history, cached:true });
   }
